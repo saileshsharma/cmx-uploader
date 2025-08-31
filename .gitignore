@@ -45,6 +45,7 @@ azureauth.json
 # =========================
 .vscode/
 .idea/
+.theia
 *.swp
 *.swo
 *.DS_Store
@@ -57,7 +58,6 @@ Thumbs.db/
 
 uploader-data/
 
-.vscode
 
 
 
