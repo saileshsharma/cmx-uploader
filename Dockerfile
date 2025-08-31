@@ -1,48 +1,31 @@
-# =========================
-# Build stage
-# =========================
-FROM maven:3.9.6-eclipse-temurin-17 AS build
-WORKDIR /app
+# ---- Build stage ----
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /workspace
 
-# cache deps
+# Cache dependencies first
 COPY pom.xml .
-RUN mvn -q -B -e dependency:go-offline
+RUN mvn -q -e -DskipTests dependency:go-offline
 
-# build
+# Build
 COPY src ./src
-RUN mvn -q -B -e clean package -DskipTests
+RUN mvn -q -DskipTests package
 
-# =========================
-# Runtime stage (JRE only)
-# =========================
-FROM eclipse-temurin:17-jre-jammy
-
-# --- security: run as non-root
-ARG APP_USER=appuser
-RUN useradd -ms /bin/bash ${APP_USER}
+# ---- Runtime stage ----
+FROM eclipse-temurin:21-jre
+# Run as non-root
+RUN useradd -u 10001 appuser
+USER appuser
 
 WORKDIR /app
+# Copy the fat JAR (adjust artifactId if needed)
+COPY --from=build /workspace/target/cmx-uploader-*.jar /app/app.jar
 
-# copy fat jar
-COPY --from=build /app/target/*.jar /app/app.jar
+# Port your app listens on
+EXPOSE 8085
 
-# envs (tweak as needed)
-ENV JAVA_OPTS=""
-ENV TZ=Asia/Singapore
-# If you use Google Cloud Storage with a service account key:
-# ENV GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcs-sa.json
+# Sensible container JVM defaults
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseZGC"
+# Activate profile "docker" by default; override with SPRING_PROFILES_ACTIVE if needed
+ENV SPRING_PROFILES_ACTIVE=docker
 
-# ephemeral tmp for uploads/processing
-VOLUME ["/tmp"]
-
-# expose service port (change if your app uses a different one)
-EXPOSE 8084
-
-# optional healthcheck (requires spring-boot-starter-actuator)
-HEALTHCHECK --interval=30s --timeout=3s --retries=5 \
-  CMD wget -qO- http://localhost:8084/actuator/health | grep -qi '"status":"UP"' || exit 1
-
-USER ${APP_USER}
-
-# use exec form so signals are forwarded
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+ENTRYPOINT ["sh","-c","java $JAVA_OPTS -Dserver.port=8084 -Dspring.profiles.active=${SPRING_PROFILES_ACTIVE} -jar /app/app.jar"]

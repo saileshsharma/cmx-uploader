@@ -1,7 +1,10 @@
 target/
-.idea/
-.vscode/
+node_modules/
+dist/
 .git/
 .gitignore
-*.iml
+Dockerfile
+docker-compose.yml
+README.md
 *.log
+.env
